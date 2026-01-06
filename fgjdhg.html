@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настольная Игра Online</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #2c3e50; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: #34495e; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center; width: 350px; }
+        button { width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        .btn-main { background: #3498db; color: white; }
+        .btn-main:hover { background: #2980b9; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; box-sizing: border-box; }
+        .hidden { display: none; }
+        .status { font-size: 0.9rem; color: #bdc3c7; margin-top: 10px; }
+        #roomCodeDisplay { font-weight: bold; color: #f1c40f; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="menu">
+    <h2>Главное меню</h2>
+    <p id="welcomeMsg">Привет, Гость!</p>
+    <button class="btn-main" onclick="showScreen('createRoomScreen')">Создать комнату</button>
+    <button class="btn-main" onclick="showScreen('joinRoomScreen')">Присоединиться</button>
+    <button class="btn-main" onclick="showScreen('profileScreen')">Профиль</button>
+</div>
+
+<div class="container hidden" id="profileScreen">
+    <h2>Профиль</h2>
+    <input type="text" id="nicknameInput" placeholder="Введите никнейм">
+    <button class="btn-main" onclick="saveProfile()">Сохранить</button>
+    <button onclick="showScreen('menu')">Назад</button>
+</div>
+
+<div class="container hidden" id="createRoomScreen">
+    <h2>Комната создана</h2>
+    <p>Код комнаты:</p>
+    <p id="roomCodeDisplay">Генерация...</p>
+    <p>Слотов: 5</p>
+    <div id="playerList">Игроки: Вы</div>
+    <button onclick="showScreen('menu')">Закрыть комнату</button>
+</div>
+
+<div class="container hidden" id="joinRoomScreen">
+    <h2>Присоединиться</h2>
+    <input type="text" id="joinCodeInput" placeholder="Введите код комнаты">
+    <button class="btn-main" onclick="joinRoom()">Войти</button>
+    <button onclick="showScreen('menu')">Назад</button>
+</div>
+
+<script>
+
+	const SECRET_PASSWORD = "huinya";
+    let access = sessionStorage.getItem('accessGranted');
+
+    if (!access) {
+        let pass = prompt("Введите пароль для доступа к игре:");
+        if (pass === SECRET_PASSWORD) {
+            sessionStorage.setItem('accessGranted', 'true');
+        } else {
+            document.body.innerHTML = "<h1>Доступ запрещен</h1>";
+        }
+    }
+	
+    let peer = null;
+    let conn = null;
+    let myNickname = localStorage.getItem('nickname') || 'Гость';
+
+    document.getElementById('welcomeMsg').innerText = `Привет, ${myNickname}!`;
+
+    function showScreen(screenId) {
+        document.querySelectorAll('.container').forEach(div => div.classList.add('hidden'));
+        document.getElementById(screenId).classList.remove('hidden');
+        
+        if(screenId === 'createRoomScreen') { startHost(); }
+    }
+
+    function saveProfile() {
+        const nick = document.getElementById('nicknameInput').value;
+        if(nick) {
+            localStorage.setItem('nickname', nick);
+            myNickname = nick;
+            document.getElementById('welcomeMsg').innerText = `Привет, ${myNickname}!`;
+            showScreen('menu');
+        }
+    }
+
+    // Логика PeerJS для сетевой игры
+    function startHost() {
+        const roomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+        document.getElementById('roomCodeDisplay').innerText = roomId;
+        
+        peer = new Peer(roomId);
+        peer.on('connection', (c) => {
+            c.on('data', (data) => {
+                alert("Игрок " + data.from + " подключился!");
+            });
+        });
+    }
+
+    function joinRoom() {
+        const code = document.getElementById('joinCodeInput').value.toUpperCase();
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(code);
+            conn.on('open', () => {
+                conn.send({ from: myNickname, action: 'join' });
+                alert("Вы подключились к комнате " + code);
+            });
+        });
+    }
+</script>
+
+</body>
+</html>
