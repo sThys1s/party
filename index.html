@@ -3,198 +3,551 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BoardGame Hub - P2P</title>
+    <title>BoardGame Hub - Poker Alpha</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
+        /* --- VISUAL CORE based on TS --- */
         :root {
-            /* Темная тема (Default) */
             --bg-gradient: radial-gradient(circle at top left, #1a1a2e, #16213e);
             --glass-bg: rgba(255, 255, 255, 0.05);
             --text-main: #e2e2e2;
-            --accent: #8b5cf6;
         }
-
-        [data-theme="light"] {
-            /* Светлая тема (Дружелюбная) */
-            --bg-gradient: linear-gradient(135deg, #ffed4a 0%, #ff9800 100%);
-            --glass-bg: rgba(255, 255, 255, 0.4);
-            --text-main: #4a2c00;
-            --accent: #e65100;
-        }
-
         body {
             background: var(--bg-gradient);
             color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            transition: all 0.4s ease;
+            font-family: 'Segoe UI', sans-serif;
             min-height: 100vh;
         }
-
         .glass {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
         }
-
-        /* Адаптивная сетка */
-        .main-grid {
-            display: grid;
-            gap: 1.5rem;
-            grid-template-columns: 1fr; /* Мобилки */
-        }
-
-        @media (min-width: 1024px) {
-            .main-grid {
-                grid-template-columns: 280px 1fr 320px; /* Десктоп */
-            }
-        }
-
         .hidden-screen { display: none !important; }
+        
+        /* Card Styles (CSS Fallback if images missing) */
+        .playing-card {
+            width: 60px; height: 90px;
+            background: white; color: black;
+            border-radius: 6px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-weight: bold; position: relative;
+            user-select: none;
+        }
+        .suit-red { color: #d93025; }
+        .suit-black { color: #1a1a1a; }
+        
+        /* Table Layout */
+        .poker-table {
+            background: radial-gradient(#2e7d32, #1b5e20);
+            border: 8px solid #3e2723;
+            border-radius: 100px;
+            position: relative;
+            min-height: 400px;
+        }
     </style>
 </head>
-<body class="p-4">
+<body class="p-4 flex flex-col items-center">
 
-    <header class="max-w-7xl mx-auto flex justify-between items-center mb-6 p-4 glass">
-        <h1 class="text-xl font-bold italic tracking-tighter">BOARDGAME HUB</h1>
+    <header class="w-full max-w-6xl flex justify-between items-center mb-6 p-4 glass">
+        <h1 class="text-xl font-bold tracking-tighter text-purple-400">BOARDGAME HUB</h1>
         <div class="flex gap-4 items-center">
-            <button onclick="toggleTheme()" class="p-2 glass text-xl">🌓</button>
             <div id="net-status" class="text-xs flex items-center gap-2">
-                <span class="w-2 h-2 bg-red-500 rounded-full"></span> Offline
+                <span class="w-2 h-2 bg-red-500 rounded-full" id="status-dot"></span> 
+                <span id="status-text">Offline</span>
             </div>
         </div>
     </header>
 
-    <main id="auth-screen" class="max-w-md mx-auto mt-20 glass p-8 text-center">
-        <h2 class="text-2xl font-bold mb-6">Вход в систему</h2>
-        <input id="peer-id-input" type="text" placeholder="ID комнаты (для входа)" class="w-full p-3 mb-4 rounded-lg bg-black/20 border border-white/10 outline-none">
-        <div class="grid grid-cols-2 gap-4">
-            <button onclick="network.createRoom()" class="bg-blue-600 p-3 rounded-lg font-bold">Создать</button>
-            <button onclick="network.joinRoom()" class="bg-purple-600 p-3 rounded-lg font-bold">Войти</button>
-        </div>
-        <p id="my-id-display" class="mt-4 text-xs opacity-60"></p>
+    <main id="profile-screen" class="w-full max-w-md glass p-8 text-center">
+        <h2 class="text-2xl font-bold mb-4">Ваш профиль</h2>
+        <input id="nickname" type="text" placeholder="Введите ваш никнейм" class="w-full p-3 mb-4 rounded-lg bg-black/20 border border-white/10 outline-none text-white">
+        <button onclick="ui.goToAuth()" class="w-full bg-purple-600 hover:bg-purple-700 p-3 rounded-lg font-bold transition">Далее</button>
     </main>
 
-    <main id="lobby-screen" class="max-w-7xl mx-auto main-grid hidden-screen">
+    <main id="auth-screen" class="w-full max-w-md glass p-8 text-center hidden-screen">
+        <h2 class="text-2xl font-bold mb-6">Подключение</h2>
+        <div class="mb-4 text-left">
+            <label class="text-xs opacity-60">ID Комнаты (для входа):</label>
+            <input id="peer-id-input" type="text" class="w-full p-3 rounded-lg bg-black/20 border border-white/10 outline-none text-white">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="network.createRoom()" class="bg-blue-600 hover:bg-blue-700 p-3 rounded-lg font-bold transition">Создать</button>
+            <button onclick="network.joinRoom()" class="bg-green-600 hover:bg-green-700 p-3 rounded-lg font-bold transition">Войти</button>
+        </div>
+        <p id="my-id-display" class="mt-4 text-[10px] opacity-60 font-mono select-all cursor-pointer bg-black/30 p-2 rounded"></p>
+    </main>
+
+    <main id="lobby-screen" class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-4 gap-4 hidden-screen">
         
-        <section class="glass p-4">
-            <h3 class="font-bold mb-4 border-b border-white/10 pb-2">Игроки</h3>
-            <div id="player-list" class="space-y-3">
-                </div>
-        </section>
-
-        <section class="glass p-6 text-center">
-            <h3 class="text-xl font-bold mb-6">Игровой стол</h3>
-            <div id="game-zone" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div onclick="gameManager.selectGame('poker')" class="p-6 glass cursor-pointer border-2 border-transparent hover:border-orange-400 transition-all">
-                    <span class="text-4xl">🃏</span>
-                    <h4 class="font-bold mt-2">Покер</h4>
-                </div>
-                <div class="p-6 glass opacity-40 cursor-not-allowed">
-                    <span class="text-4xl">🕵️</span>
-                    <h4 class="font-bold mt-2">Мафия</h4>
-                </div>
+        <aside class="lg:col-span-1 space-y-4">
+            <div class="glass p-4 min-h-[200px]">
+                <h3 class="font-bold mb-2 text-sm uppercase tracking-wider opacity-70">Игроки</h3>
+                <div id="player-list" class="space-y-2"></div>
+                <button id="btn-ready" onclick="gameManager.toggleReady()" class="w-full mt-4 bg-gray-600 py-2 rounded font-bold text-sm hover:bg-gray-500">Я ГОТОВ</button>
             </div>
-            <div id="host-controls" class="mt-10 hidden-screen">
-                <button class="bg-orange-500 px-8 py-3 rounded-full font-black animate-bounce">НАЧАТЬ ИГРУ</button>
-            </div>
-        </section>
-
-        <aside class="glass flex flex-col h-[400px] lg:h-auto">
-            <div class="p-3 font-bold border-b border-white/10 text-center">Чат</div>
-            <div id="chat-box" class="flex-1 p-4 overflow-y-auto text-sm space-y-2"></div>
-            <div class="p-3">
-                <input id="chat-input" type="text" placeholder="Сообщение..." class="w-full p-2 glass outline-none rounded-lg">
+            
+            <div class="glass flex flex-col h-[300px]">
+                <div class="p-3 font-bold border-b border-white/10 text-sm">Чат комнаты</div>
+                <div id="chat-box" class="flex-1 p-3 overflow-y-auto text-xs space-y-2"></div>
+                <input id="chat-input" onkeypress="if(event.key === 'Enter') gameManager.sendChat()" type="text" placeholder="Сообщение..." class="w-full p-3 bg-transparent outline-none border-t border-white/10 text-sm">
             </div>
         </aside>
+
+        <section class="lg:col-span-3 space-y-4">
+            
+            <div id="game-selector" class="glass p-8 text-center">
+                <h3 class="text-2xl font-bold mb-8">Выберите игру</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                    <div onclick="gameManager.voteForGame('poker')" class="p-6 glass cursor-pointer border-2 border-transparent hover:border-purple-500 transition-all group">
+                        <div class="text-5xl mb-4 group-hover:scale-110 transition">🃏</div>
+                        <h4 class="font-bold text-xl">Poker Texas Hold'em</h4>
+                        <p class="text-xs mt-2 opacity-60">Классический покер. Поддержка до 6 игроков.</p>
+                    </div>
+                    <div class="p-6 glass opacity-40 cursor-not-allowed grayscale">
+                        <div class="text-5xl mb-4">🕵️</div>
+                        <h4 class="font-bold text-xl">Mafia</h4>
+                        <p class="text-xs mt-2 opacity-60">В разработке...</p>
+                    </div>
+                </div>
+                
+                <div id="host-controls" class="mt-10 hidden-screen">
+                    <p class="text-sm text-yellow-500 mb-2">Вы — Хост. Ожидание готовности игроков...</p>
+                    <button id="btn-start" onclick="gameManager.tryStartGame()" class="bg-gradient-to-r from-orange-500 to-red-600 px-10 py-3 rounded-full font-black tracking-widest opacity-50 cursor-not-allowed">НАЧАТЬ</button>
+                </div>
+            </div>
+
+            <div id="game-view" class="hidden-screen">
+                <div class="poker-table w-full flex flex-col items-center justify-center p-4 shadow-2xl">
+                    
+                    <div class="text-white/60 text-xs mb-2 uppercase tracking-widest">Стол (Board)</div>
+                    <div id="community-cards" class="flex gap-2 mb-8 min-h-[90px]">
+                        </div>
+
+                    <div class="bg-black/40 px-6 py-2 rounded-full border border-yellow-500/30 text-yellow-400 font-mono mb-8">
+                        Банк: $<span id="pot-display">0</span>
+                    </div>
+
+                    <div id="player-controls" class="flex gap-2 mb-4 hidden-screen">
+                        <button onclick="gameManager.sendAction('fold')" class="bg-red-900/80 hover:bg-red-600 px-4 py-2 rounded border border-red-500 text-sm font-bold">Fold</button>
+                        <button onclick="gameManager.sendAction('check')" class="bg-blue-900/80 hover:bg-blue-600 px-4 py-2 rounded border border-blue-500 text-sm font-bold">Check</button>
+                        <button onclick="gameManager.sendAction('call')" class="bg-green-900/80 hover:bg-green-600 px-4 py-2 rounded border border-green-500 text-sm font-bold">Call</button>
+                        <button onclick="gameManager.sendAction('raise')" class="bg-yellow-900/80 hover:bg-yellow-600 px-4 py-2 rounded border border-yellow-500 text-sm font-bold">Raise 100</button>
+                    </div>
+                    
+                    <div id="game-status-text" class="text-sm font-bold animate-pulse text-purple-300">Ожидание хода...</div>
+                </div>
+
+                <div class="mt-6 flex flex-col items-center">
+                    <div class="text-xs opacity-50 mb-1">Ваша рука</div>
+                    <div id="my-hand" class="flex gap-2"></div>
+                </div>
+            </div>
+
+        </section>
     </main>
 
     <script>
-        // --- ШАГ 1: ТЕМЫ ---
-        function toggleTheme() {
-            const body = document.documentElement;
-            const current = body.getAttribute('data-theme');
-            body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+        // --- 1. CORE UTILS & CLASSES ---
+
+        // Simple Card Class [cite: 23]
+        class Card {
+            constructor(suit, value) {
+                this.suit = suit; // 'h', 'd', 'c', 's'
+                this.value = value; // 2-14 (14 is Ace)
+            }
+            // Генерация HTML карты (можно заменить на <img>) [cite: 30]
+            render() {
+                const suits = {'h': '♥', 'd': '♦', 'c': '♣', 's': '♠'};
+                const colors = {'h': 'suit-red', 'd': 'suit-red', 'c': 'suit-black', 's': 'suit-black'};
+                const valMap = {11:'J', 12:'Q', 13:'K', 14:'A'};
+                const displayVal = valMap[this.value] || this.value;
+                
+                // Если нужны картинки, раскомментируйте строку ниже и удалите остальное в этом методе
+                // return `<img src="./assets/cards/${this.value}_${this.suit}.png" class="w-[60px]">`;
+
+                return `
+                    <div class="playing-card border border-gray-300 shadow-lg">
+                        <div class="text-lg ${colors[this.suit]}">${suits[this.suit]}</div>
+                        <div class="text-sm font-bold text-black">${displayVal}</div>
+                    </div>
+                `;
+            }
         }
 
-        // --- ШАГ 2: СЕТЕВАЯ ЛОГИКА (PeerJS) --- [cite: 17, 60, 65]
-        const network = {
-            peer: null,
-            conn: null,
-            isHost: false,
-            connections: [],
+        class Deck {
+            constructor() {
+                this.cards = [];
+                const suits = ['h', 'd', 'c', 's'];
+                for (let s of suits) {
+                    for (let v = 2; v <= 14; v++) this.cards.push(new Card(s, v));
+                }
+            }
+            shuffle() {
+                this.cards.sort(() => Math.random() - 0.5);
+            }
+            deal() { return this.cards.pop(); }
+        }
 
-            init() {
-                this.peer = new Peer();
-                this.peer.on('open', (id) => {
-                    document.getElementById('my-id-display').innerText = "Ваш сетевой ID: " + id;
-                    document.getElementById('net-status').innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> Online';
-                });
-
-                // Обработка входящих подключений (только для Хоста) [cite: 17, 61]
-                this.peer.on('connection', (c) => {
-                    this.isHost = true;
-                    this.connections.push(c);
-                    this.setupConnHandlers(c);
-                    this.broadcast({ type: 'PLAYER_JOINED', name: 'Друг подключился' });
-                    gameManager.updateLobby();
-                });
+        // --- 2. GAME LOGIC (POKER MODULE) --- [cite: 32, 69]
+        const PokerModule = {
+            state: {
+                phase: 'preflop', // preflop, flop, turn, river
+                pot: 0,
+                communityCards: [],
+                hands: {}, // {peerId: [Card, Card]}
+                currentTurnIndex: 0,
+                deck: null
             },
 
-            createRoom() {
-                this.isHost = true;
-                document.getElementById('auth-screen').classList.add('hidden-screen');
-                document.getElementById('lobby-screen').classList.remove('hidden-screen');
-                document.getElementById('host-controls').classList.remove('hidden-screen');
-                gameManager.updateLobby();
-            },
-
-            joinRoom() {
-                const targetId = document.getElementById('peer-id-input').value;
-                if (!targetId) return alert("Введите ID хоста");
+            // Инициализация новой игры (Только Хост)
+            initGame(playerIds) {
+                this.state.deck = new Deck();
+                this.state.deck.shuffle();
+                this.state.communityCards = [];
+                this.state.pot = 0;
+                this.state.hands = {};
                 
-                this.conn = this.peer.connect(targetId);
-                this.setupConnHandlers(this.conn);
-                
-                document.getElementById('auth-screen').classList.add('hidden-screen');
-                document.getElementById('lobby-screen').classList.remove('hidden-screen');
-            },
-
-            setupConnHandlers(c) {
-                c.on('data', (data) => {
-                    console.log("Получены данные:", data);
-                    // Логика обработки сообщений типа UPDATE_STATE [cite: 25, 39, 70]
+                // Раздача карт [cite: 35]
+                playerIds.forEach(id => {
+                    this.state.hands[id] = [this.state.deck.deal(), this.state.deck.deal()];
                 });
+
+                return this.state;
             },
 
-            broadcast(data) {
-                this.connections.forEach(c => c.send(data));
+            // Простой переход хода (Logic stub)
+            nextPhase() {
+                const deck = this.state.deck;
+                if(this.state.communityCards.length === 0) {
+                    this.state.communityCards.push(deck.deal(), deck.deal(), deck.deal()); // Flop
+                } else if (this.state.communityCards.length < 5) {
+                    this.state.communityCards.push(deck.deal()); // Turn/River
+                }
             }
         };
 
-        // --- ШАГ 3: МЕНЕДЖЕР ИГРЫ --- 
-        const gameManager = {
-            players: [{name: 'Вы (Я)', isHost: false}],
-            activeModule: null,
+        // --- 3. NETWORK MANAGER (PeerJS) --- [cite: 17, 60]
+        const network = {
+            peer: null,
+            connections: [], // List of DataConnections (Host only)
+            hostConn: null,  // Connection to Host (Client only)
+            myId: null,
 
-            updateLobby() {
+            init() {
+                this.peer = new Peer();
+                
+                this.peer.on('open', (id) => {
+                    this.myId = id;
+                    document.getElementById('my-id-display').innerText = id;
+                    this.setStatus(true);
+                });
+
+                this.peer.on('error', (err) => alert("Ошибка PeerJS: " + err));
+
+                // Логика Хоста: Входящее подключение
+                this.peer.on('connection', (conn) => {
+                    this.connections.push(conn);
+                    this.setupDataHandler(conn);
+                    
+                    // Отправляем новому игроку текущее состояние лобби
+                    setTimeout(() => {
+                         gameManager.hostHandleJoin(conn.peer);
+                    }, 500);
+                });
+            },
+
+            setStatus(online) {
+                const el = document.getElementById('status-dot');
+                const txt = document.getElementById('status-text');
+                if(online) {
+                    el.classList.replace('bg-red-500', 'bg-green-500');
+                    txt.innerText = "Online";
+                }
+            },
+
+            createRoom() {
+                gameManager.isHost = true;
+                gameManager.players.push({
+                    id: this.myId, 
+                    name: ui.nickname, 
+                    isHost: true, 
+                    ready: true
+                });
+                ui.showLobby();
+                ui.updatePlayerList();
+            },
+
+            joinRoom() {
+                const hostId = document.getElementById('peer-id-input').value.trim();
+                if(!hostId) return alert("Введите ID");
+                
+                this.hostConn = this.peer.connect(hostId);
+                
+                this.hostConn.on('open', () => {
+                    ui.showLobby();
+                    // Отправляем свои данные хосту 
+                    this.sendToHost({
+                        type: 'JOIN_REQUEST',
+                        payload: { name: ui.nickname }
+                    });
+                });
+
+                this.setupDataHandler(this.hostConn);
+            },
+
+            setupDataHandler(conn) {
+                conn.on('data', (data) => {
+                    // Маршрутизация сообщений [cite: 39]
+                    gameManager.handleMessage(data, conn.peer);
+                });
+                conn.on('close', () => {
+                    // Обработка разрыва [cite: 27]
+                    if(gameManager.isHost) {
+                        gameManager.players = gameManager.players.filter(p => p.id !== conn.peer);
+                        gameManager.broadcastLobbyState();
+                    } else {
+                        alert("Хост отключился");
+                        location.reload();
+                    }
+                });
+            },
+
+            // Методы отправки
+            sendToHost(msg) { if(this.hostConn) this.hostConn.send(msg); },
+            broadcast(msg) { this.connections.forEach(c => c.send(msg)); }
+        };
+
+        // --- 4. GAME MANAGER (Orchestrator) --- [cite: 18, 31]
+        const gameManager = {
+            isHost: false,
+            players: [], // [{id, name, ready, isHost}]
+            gameState: null, 
+
+            // Обработка входящих сообщений
+            handleMessage(msg, senderId) {
+                console.log("MSG:", msg);
+                
+                switch(msg.type) {
+                    // --- ЛОГИКА ХОСТА ---
+                    case 'JOIN_REQUEST':
+                        if(!this.isHost) return;
+                        this.players.push({
+                            id: senderId,
+                            name: msg.payload.name,
+                            ready: false,
+                            isHost: false
+                        });
+                        this.broadcastLobbyState();
+                        break;
+                    
+                    case 'TOGGLE_READY':
+                        if(!this.isHost) return;
+                        const p = this.players.find(x => x.id === senderId);
+                        if(p) p.ready = !p.ready;
+                        this.broadcastLobbyState();
+                        break;
+
+                    case 'CHAT_MSG':
+                        ui.addChatMessage(msg.payload.name, msg.payload.text);
+                        if(this.isHost) network.broadcast(msg); // Ребродкаст всем
+                        break;
+
+                    case 'GAME_ACTION': 
+                        // Здесь должна быть валидация хода [cite: 39]
+                        this.processGameAction(senderId, msg.payload);
+                        break;
+
+                    // --- ЛОГИКА КЛИЕНТА ---
+                    case 'LOBBY_UPDATE':
+                        this.players = msg.payload;
+                        ui.updatePlayerList();
+                        break;
+
+                    case 'GAME_START':
+                        ui.startGameUI();
+                        break;
+
+                    case 'GAME_STATE_UPDATE':
+                        this.syncGameState(msg.payload);
+                        break;
+                }
+            },
+
+            // Host Actions
+            hostHandleJoin(peerId) {
+                // Initial sync logic handled in message parser
+            },
+
+            broadcastLobbyState() {
+                const state = { type: 'LOBBY_UPDATE', payload: this.players };
+                network.broadcast(state);
+                ui.updatePlayerList(); // Update host UI too
+                
+                // Проверка кнопки старт [cite: 22]
+                const allReady = this.players.every(p => p.ready) && this.players.length > 1;
+                const btn = document.getElementById('btn-start');
+                if(btn) {
+                    btn.classList.toggle('opacity-50', !allReady);
+                    btn.classList.toggle('cursor-not-allowed', !allReady);
+                }
+            },
+
+            tryStartGame() {
+                const allReady = this.players.every(p => p.ready);
+                if(allReady && this.players.length > 1) {
+                    // Инициализация Покера
+                    const initialData = PokerModule.initGame(this.players.map(p => p.id));
+                    
+                    network.broadcast({ type: 'GAME_START' });
+                    this.broadcastGameState(initialData);
+                    
+                    ui.startGameUI(); // Для хоста
+                    this.syncGameState(initialData); // Для хоста
+                } else {
+                    alert("Нужно минимум 2 игрока и все должны быть готовы!");
+                }
+            },
+
+            processGameAction(playerId, action) {
+                // Заглушка логики: Просто крутим карты дальше
+                if(action === 'fold' || action === 'check' || action === 'call' || action === 'raise') {
+                    PokerModule.nextPhase();
+                    this.broadcastGameState(PokerModule.state);
+                }
+            },
+
+            broadcastGameState(state) {
+                // Санитизация: Не отправлять чужие карты! (Упрощено для примера)
+                // В реальном проде здесь нужно фильтровать hands для каждого клиента
+                network.broadcast({
+                    type: 'GAME_STATE_UPDATE',
+                    payload: state
+                });
+                this.syncGameState(state); // Update host
+            },
+
+            // Client Actions
+            toggleReady() {
+                if(this.isHost) return; // Хост всегда готов
+                network.sendToHost({ type: 'TOGGLE_READY' });
+                
+                // Визуально меняем кнопку сразу (Optimistic UI)
+                const btn = document.getElementById('btn-ready');
+                btn.innerText = btn.innerText === "Я ГОТОВ" ? "ОТМЕНА" : "Я ГОТОВ";
+                btn.classList.toggle('bg-green-600');
+            },
+
+            sendChat() {
+                const input = document.getElementById('chat-input');
+                const text = input.value;
+                if(!text) return;
+                
+                const msg = { type: 'CHAT_MSG', payload: { name: ui.nickname, text } };
+                if(this.isHost) {
+                    network.broadcast(msg);
+                    ui.addChatMessage(ui.nickname, text);
+                } else {
+                    network.sendToHost(msg);
+                }
+                input.value = '';
+            },
+
+            sendAction(actionType) {
+                if(this.isHost) {
+                    this.processGameAction(network.myId, actionType);
+                } else {
+                    network.sendToHost({
+                        type: 'GAME_ACTION',
+                        payload: actionType
+                    });
+                }
+            },
+
+            // Sync Logic
+            syncGameState(serverState) {
+                // Обновление стола
+                const commContainer = document.getElementById('community-cards');
+                commContainer.innerHTML = '';
+                // Восстанавливаем объекты Card из JSON
+                serverState.communityCards.forEach(c => {
+                    const card = new Card(c.suit, c.value);
+                    const div = document.createElement('div');
+                    div.innerHTML = card.render();
+                    commContainer.appendChild(div.firstElementChild);
+                });
+
+                document.getElementById('pot-display').innerText = serverState.pot;
+                document.getElementById('game-status-text').innerText = `Фаза: ${serverState.phase}`;
+
+                // Обновление своей руки
+                const myHand = serverState.hands[network.myId];
+                if(myHand) {
+                    const handContainer = document.getElementById('my-hand');
+                    handContainer.innerHTML = '';
+                    myHand.forEach(c => {
+                        const card = new Card(c.suit, c.value);
+                        const div = document.createElement('div');
+                        div.innerHTML = card.render();
+                        handContainer.appendChild(div.firstElementChild);
+                    });
+                }
+            }
+        };
+
+        // --- 5. UI CONTROLLER ---
+        const ui = {
+            nickname: "Player",
+            
+            goToAuth() {
+                const nick = document.getElementById('nickname').value;
+                if(!nick) return alert("Введите имя!");
+                this.nickname = nick;
+                
+                document.getElementById('profile-screen').classList.add('hidden-screen');
+                document.getElementById('auth-screen').classList.remove('hidden-screen');
+                
+                network.init(); // Start PeerJS only after profile
+            },
+
+            showLobby() {
+                document.getElementById('auth-screen').classList.add('hidden-screen');
+                document.getElementById('lobby-screen').classList.remove('hidden-screen');
+                if(gameManager.isHost) {
+                    document.getElementById('host-controls').classList.remove('hidden-screen');
+                }
+            },
+
+            updatePlayerList() {
                 const list = document.getElementById('player-list');
-                list.innerHTML = this.players.map(p => `
-                    <div class="p-3 glass flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-orange-400"></div>
-                        <span>${p.name}</span>
-                        <span class="ml-auto text-[10px] bg-green-500/20 p-1 rounded">READY</span>
+                list.innerHTML = gameManager.players.map(p => `
+                    <div class="p-2 glass flex items-center gap-3 border-l-4 ${p.ready ? 'border-green-500' : 'border-red-500'}">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center font-bold text-xs">
+                            ${p.name.substring(0,2).toUpperCase()}
+                        </div>
+                        <span class="text-sm font-medium">${p.name} ${p.isHost ? '👑' : ''}</span>
+                        ${p.ready ? '<span class="ml-auto text-[10px] bg-green-500/20 text-green-300 px-2 py-1 rounded">READY</span>' : ''}
                     </div>
                 `).join('');
             },
 
-            selectGame(gameType) {
-                alert("Модуль " + gameType + " будет загружен в Шаге 4!");
+            startGameUI() {
+                document.getElementById('game-selector').classList.add('hidden-screen');
+                document.getElementById('game-view').classList.remove('hidden-screen');
+                document.getElementById('player-controls').classList.remove('hidden-screen');
+            },
+
+            addChatMessage(name, text) {
+                const box = document.getElementById('chat-box');
+                box.innerHTML += `<div class="mb-1"><span class="font-bold text-purple-400">${name}:</span> ${text}</div>`;
+                box.scrollTop = box.scrollHeight;
             }
         };
 
-        network.init();
     </script>
 </body>
 </html>
